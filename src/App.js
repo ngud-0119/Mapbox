@@ -11,37 +11,63 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 mapboxgl.accessToken = 'your-access-token';
 
 function App() {
-  const mapboxElRef = useRef(null); // DOM element to render map
+  const fetcher = (url) =>
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) =>
+        data.map((point, index) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [point.coordinates.longitude, point.coordinates.latitude]
+          },
+          properties: {
+            id: index, // unique identifier in this case the index
+            country: point.country,
+            province: point.province,
+            cases: point.stats.confirmed,
+            deaths: point.stats.deaths
+          }
+        }))
+      );
 
-  // Initialize our map
+  // Fetching our data with swr package
+  const { data } = useSWR('https://disease.sh/v3/covid-19/jhucsse', fetcher);
+
   useEffect(() => {
-    // You can store the map instance with useRef too
-    const map = new mapboxgl.Map({
-      container: mapboxElRef.current,
-      style: 'mapbox://styles/notalemesa/ck8dqwdum09ju1ioj65e3ql3k',
-      center: [-98, 37], // initial geo location
-      zoom: 3 // initial zoom
-    });
+    if (data) {
+      const map = new mapboxgl.Map({
+        /* ... previous code */
+      });
 
-    // Add navigation controls to the top right of the canvas
-    map.addControl(new mapboxgl.NavigationControl());
+      // Call this method when the map is loaded
+      map.once('load', function () {
+        // Add our SOURCE
+        // with id "points"
+        map.addSource('points', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: data
+          }
+        });
 
-    // Add navigation control to center your map on your location
-    map.addControl(
-      new mapboxgl.GeolocateControl({
-        fitBoundsOptions: { maxZoom: 6 }
-      })
-    );
-  }, []);
-
-  return (
-    <div className="App">
-      <div className="mapContainer">
-        {/* Assigned Mapbox container */}
-        <div className="mapBox" ref={mapboxElRef} />
-      </div>
-    </div>
-  );
+        // Add our layer
+        map.addLayer({
+          id: 'circles',
+          source: 'points', // this should be the id of the source
+          type: 'circle',
+          // paint properties
+          paint: {
+            'circle-opacity': 0.75,
+            'circle-stroke-width': 1,
+            'circle-radius': 4,
+            'circle-color': '#FFEB3B'
+          }
+        });
+      });
+    }
+  }, [data]);
 }
 
 export default App;
